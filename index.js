@@ -30,8 +30,8 @@ const DB_NAME = "chetanDB";
 const COLLECTION = "collection1";
 
 // Timing
-const POLL_INTERVAL = 2000;        // 2 sec (Live UI)
-const MONGO_INTERVAL = 120000;     // 2 min (DB Save)
+const POLL_INTERVAL = 2000;      // 2 sec
+const MONGO_INTERVAL = 120000;  // 2 min
 
 
 // ================= DEVICE =================
@@ -39,7 +39,7 @@ const MONGO_INTERVAL = 120000;     // 2 min (DB Save)
 const device = {
   id: 1,
   name: "Meter-1",
-  ip: "192.168.0.101",
+  ip: "192.168.0.201",
   unitId: 1
 };
 
@@ -50,7 +50,6 @@ let modbusClient = null;
 let mongoClient = null;
 let collection = null;
 let liveData = null;
-
 let lastMongoSave = 0;
 
 
@@ -71,7 +70,7 @@ async function connectModbus() {
     });
 
     modbusClient.setID(device.unitId);
-    modbusClient.setTimeout(2000);
+    modbusClient.setTimeout(3000);
 
     console.log("✅ Modbus Connected");
 
@@ -104,9 +103,6 @@ async function connectMongo() {
 
     collection = db.collection(COLLECTION);
 
-    // Index for fast search (NOT unique)
-    // await collection.createIndex({ createdAt: 1 });
-
     console.log("✅ MongoDB Connected");
 
   } catch (err) {
@@ -120,26 +116,87 @@ async function connectMongo() {
 connectMongo();
 
 
+// ================= READ IN CHUNKS =================
+
+async function readChunks(client, start, total, chunkSize = 20) {
+
+  const data = [];
+
+  for (let i = 0; i < total; i += chunkSize) {
+
+    const size = Math.min(chunkSize, total - i);
+
+    console.log(`📦 Reading: ${start + i} → ${start + i + size - 1}`);
+
+    const res = await client.readHoldingRegisters(
+      start + i,
+      size
+    );
+
+    if (!res || !res.data) {
+      throw new Error("Empty Modbus Response");
+    }
+
+    data.push(...res.data);
+  }
+
+  return data;
+}
+
+
 // ================= READ REGISTERS =================
 
 async function readRegisters() {
 
-  // Read 44096 → 44102
-  // Address = Register - 40001
-  const start = 4095;
-  const length = 7;
+  // 44096 → 44160
+  // Modbus = Reg - 40001
 
-  const r = await modbusClient.readHoldingRegisters(start, length);
+  const start = 4095;   // 44096 - 40001
+  const total = 65;     // Total registers
+  const chunk = 20;     // Safe size
 
-  const d = r.data;
+  const d = await readChunks(
+    modbusClient,
+    start,
+    total,
+    chunk
+  );
 
   return {
 
     reg44096: d[0],
     reg44098: d[2],
     reg44100: d[4],
-    reg44102: d[6]
-
+    reg44102: d[6],
+    reg44104: d[8],
+    reg44106: d[10],
+    reg44108: d[12],
+    reg44110: d[14],
+    reg44112: d[16],
+    reg44114: d[18],
+    reg44116: d[20],
+    reg44118: d[22],
+    reg44120: d[24],
+    reg44122: d[26],
+    reg44124: d[28],
+    reg44126: d[30],
+    reg44128: d[32],
+    reg44130: d[34],
+    reg44132: d[36],
+    reg44134: d[38],
+    reg44136: d[40],
+    reg44138: d[42],
+    reg44140: d[44],
+    reg44142: d[46],
+    reg44144: d[48],
+    reg44146: d[50],
+    reg44148: d[52],
+    reg44150: d[54],
+    reg44152: d[56],
+    reg44154: d[58],
+    reg44156: d[60],
+    reg44158: d[62],
+    reg44160: d[64]
   };
 }
 
@@ -148,7 +205,6 @@ async function readRegisters() {
 
 async function pollMeter() {
 
-  // Auto reconnect
   if (!modbusClient || !modbusClient.isOpen) {
     connectModbus();
     return;
@@ -163,50 +219,38 @@ async function pollMeter() {
     const ts = Date.now();
 
 
-    // ========== MONGO DATA FORMAT ==========
+    // ========== MONGO DATA ==========
 
     const mongoData = {
 
-      // deviceId: device.id,
       deviceName: device.name,
 
       Data: {
 
-        Vry: {
-          desc: "Voltage R-Y",
+        V_3PHASE: {
+          desc: "3-PHASE SYSTEM VOLTAGE",
           value: values.reg44096,
           unit: "V",
           ts
         },
 
-        Vyb: {
-          desc: "Voltage Y-B",
+        VL1: {
+          desc: "PHASE VOLTAGE L1-N",
           value: values.reg44098,
           unit: "V",
           ts
         },
-
-        Vbr: {
-          desc: "Voltage B-R",
-          value: values.reg44100,
-          unit: "V",
-          ts
-        },
-
-        Vrn: {
-          desc: "Voltage R-N",
-          value: values.reg44102,
+        VL2: {
+          desc: "PHASE VOLTAGE L1-N",
+          value: values.reg44160,
           unit: "V",
           ts
         }
-
-      },
-
-      // createdAt: new Date()
+      }
     };
 
 
-    // ========== SAVE EVERY 2 MIN ==========
+    // ========== SAVE TO DB ==========
 
     const now = Date.now();
 
@@ -220,7 +264,7 @@ async function pollMeter() {
     }
 
 
-    // ========== LIVE UI DATA ==========
+    // ========== LIVE DATA ==========
 
     liveData = {
 
@@ -228,8 +272,7 @@ async function pollMeter() {
 
       reg44096: values.reg44096,
       reg44098: values.reg44098,
-      reg44100: values.reg44100,
-      reg44102: values.reg44102,
+      reg44160: values.reg44160,
 
       time: new Date().toLocaleString()
     };
