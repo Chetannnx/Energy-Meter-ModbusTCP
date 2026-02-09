@@ -25,7 +25,9 @@ const MODBUS_PORT = 502;
 const SERVER_PORT = 3000;
 
 // MongoDB
-const MONGO_URL = "mongodb://chetan:chetan123@192.168.1.9:27021/chetanDB?authSource=admin";
+const MONGO_URL =
+  "mongodb://chetan:chetan123@192.168.1.9:27021/chetanDB?authSource=admin";
+
 const DB_NAME = "chetanDB";
 const COLLECTION = "collection1";
 
@@ -37,7 +39,6 @@ const MONGO_INTERVAL = 120000;  // 2 min
 // ================= DEVICE =================
 
 const device = {
-  id: 1,
   name: "Meter-1",
   ip: "192.168.0.201",
   unitId: 1
@@ -46,20 +47,21 @@ const device = {
 
 // ================= GLOBAL =================
 
-let modbusClient = null;
-let mongoClient = null;
-let collection = null;
+let modbusClient;
+let mongoClient;
+let collection;
+
 let liveData = null;
 let lastMongoSave = 0;
 
 
-// ================= CONNECT MODBUS =================
+// ================= MODBUS CONNECT =================
 
 async function connectModbus() {
 
   try {
 
-    if (modbusClient && modbusClient.isOpen) return;
+    if (modbusClient?.isOpen) return;
 
     console.log("🔄 Connecting Modbus...");
 
@@ -85,7 +87,7 @@ async function connectModbus() {
 connectModbus();
 
 
-// ================= CONNECT MONGODB =================
+// ================= MONGO CONNECT =================
 
 async function connectMongo() {
 
@@ -107,7 +109,7 @@ async function connectMongo() {
 
   } catch (err) {
 
-    console.log("❌ MongoDB Error:", err.message);
+    console.log("❌ Mongo Error:", err.message);
 
     setTimeout(connectMongo, 5000);
   }
@@ -116,87 +118,127 @@ async function connectMongo() {
 connectMongo();
 
 
-// ================= READ IN CHUNKS =================
+// ================= SAFE READ =================
 
-async function readChunks(client, start, total, chunkSize = 20) {
+async function readChunks(start, count, chunk = 20) {
 
-  const data = [];
+  const result = [];
 
-  for (let i = 0; i < total; i += chunkSize) {
+  for (let i = 0; i < count; i += chunk) {
 
-    const size = Math.min(chunkSize, total - i);
+    const size = Math.min(chunk, count - i);
+ 
+    const addr = start + i;
 
-    console.log(`📦 Reading: ${start + i} → ${start + i + size - 1}`);
+    console.log(`📦 Read: ${addr} → ${addr + size - 1}`);
 
-    const res = await client.readHoldingRegisters(
-      start + i,
-      size
-    );
+    const res =
+      await modbusClient.readHoldingRegisters(addr, size);
 
-    if (!res || !res.data) {
+    if (!res?.data) {
       throw new Error("Empty Modbus Response");
     }
 
-    data.push(...res.data);
+    result.push(...res.data);
+  }
+
+  return result;
+}
+
+
+// ================= REGISTER BLOCKS =================
+
+// Only REAL blocks (no gaps)
+
+const BLOCKS = [
+
+  // 44096 → 44160
+  { start: 4095, count: 65 },
+
+  // 44166 → 44190
+  { start: 4165, count: 25 },
+
+  // 44192 → 44200
+  { start: 4191, count: 9 }
+];
+
+
+// ================= READ ALL =================
+
+async function readRegisters() {
+
+  const data = {};
+
+  for (const block of BLOCKS) {
+
+    const d = await readChunks(
+      block.start,
+      block.count,
+      20
+    );
+
+    data[block.start] = d;
   }
 
   return data;
 }
 
 
-// ================= READ REGISTERS =================
+// ================= MAP VALUES =================
 
-async function readRegisters() {
+function mapValues(raw) {
 
-  // 44096 → 44160
-  // Modbus = Reg - 40001
-
-  const start = 4095;   // 44096 - 40001
-  const total = 65;     // Total registers
-  const chunk = 20;     // Safe size
-
-  const d = await readChunks(
-    modbusClient,
-    start,
-    total,
-    chunk
-  );
+  const b1 = raw[4095]; // first block
+  const b2 = raw[4165]; // second block
+  const b3 = raw[4191]; // third block
 
   return {
 
-    reg44096: d[0],
-    reg44098: d[2],
-    reg44100: d[4],
-    reg44102: d[6],
-    reg44104: d[8],
-    reg44106: d[10],
-    reg44108: d[12],
-    reg44110: d[14],
-    reg44112: d[16],
-    reg44114: d[18],
-    reg44116: d[20],
-    reg44118: d[22],
-    reg44120: d[24],
-    reg44122: d[26],
-    reg44124: d[28],
-    reg44126: d[30],
-    reg44128: d[32],
-    reg44130: d[34],
-    reg44132: d[36],
-    reg44134: d[38],
-    reg44136: d[40],
-    reg44138: d[42],
-    reg44140: d[44],
-    reg44142: d[46],
-    reg44144: d[48],
-    reg44146: d[50],
-    reg44148: d[52],
-    reg44150: d[54],
-    reg44152: d[56],
-    reg44154: d[58],
-    reg44156: d[60],
-    reg44158: d[62],
-    reg44160: d[64]
+    // BLOCK 1
+    reg44096: b1[0],
+    reg44098: b1[2],
+    reg44100: b1[4],
+    reg44102: b1[6],
+    reg44104: b1[8],
+    reg44106: b1[10],
+    reg44108: b1[12],
+    reg44110: b1[14],
+    reg44112: b1[16],
+    reg44114: b1[18],
+    reg44116: b1[20],
+    reg44118: b1[22],
+    reg44120: b1[24],
+    reg44122: b1[26],
+    reg44124: b1[28],
+    reg44126: b1[30],
+    reg44128: b1[32],
+    reg44130: b1[34],
+    reg44132: b1[36],
+    reg44134: b1[38],
+    reg44136: b1[40],
+    reg44138: b1[42],
+    reg44140: b1[44],
+    reg44142: b1[46],
+    reg44144: b1[48],
+    reg44146: b1[50],
+    reg44148: b1[52],
+    reg44150: b1[54],
+    reg44152: b1[56],
+    reg44154: b1[58],
+    reg44156: b1[60],
+    reg44158: b1[62],
+    reg44160: b1[64],
+
+    // BLOCK 2
+    reg44166: b2[0],
+
+    // BLOCK 3
+    reg44192: b3[0],
+    reg44194: b3[2],
+    reg44196: b3[4],
+    reg44198: b3[6],
+    reg44200: b3[8],
+
   };
 }
 
@@ -205,7 +247,7 @@ async function readRegisters() {
 
 async function pollMeter() {
 
-  if (!modbusClient || !modbusClient.isOpen) {
+  if (!modbusClient?.isOpen) {
     connectModbus();
     return;
   }
@@ -214,20 +256,34 @@ async function pollMeter() {
 
   try {
 
-    const values = await readRegisters();
+    // Read
+    const raw = await readRegisters();
+
+    // Map
+    const values = mapValues(raw);
 
     const ts = Date.now();
 
 
-    // ========== MONGO DATA ==========
+    // ========== MONGO FORMAT ==========
+
+    // const mongoData = {
+
+    //   device: device.name,
+
+    //   timestamp: new Date(),
+
+    //   values
+    // };
+
 
     const mongoData = {
 
-      deviceName: device.name,
+  deviceName: device.name,
 
-      Data: {
+  Data: {
 
-        V_3PHASE: {
+    V_3PHASE: {
           desc: "3-PHASE SYSTEM VOLTAGE",
           value: values.reg44096,
           unit: "V",
@@ -240,17 +296,240 @@ async function pollMeter() {
           unit: "V",
           ts
         },
+
         VL2: {
-          desc: "PHASE VOLTAGE L1-N",
-          value: values.reg44160,
+          desc: "PHASE VOLTAGE L2-N",
+          value: values.reg44100,
           unit: "V",
           ts
-        }
-      }
-    };
+        },
+
+        VL3: {
+          desc: "PHASE VOLTAGE L3-N",
+          value: values.reg44102,
+          unit: "V",
+          ts
+        },
+        L1_2V: {
+          desc: "LINE VOLTAGE L1-2",
+          value: values.reg44104,
+          unit: "V",
+          ts
+        },
+        L2_3V: {
+          desc: "LINE VOLTAGE L2-3",
+          value: values.reg44106,
+          unit: "V",
+          ts
+        },
+        L3_1V: {
+          desc: "LINE VOLTAGE L3-1",
+          value: values.reg44108,
+          unit: "V",
+          ts
+        },
+        C_3PHASE: {
+          desc: "3-PHASE SYSTEM CURRENT",
+          value: values.reg44110,
+          unit: "mA",
+          ts
+        },
+        CL1: {
+          desc: "LINE CURRENT L1",
+          value: values.reg44112,
+          unit: "mA",
+          ts
+        },
+        CL2: {
+          desc: "LINE CURRENT L2",
+          value: values.reg44114,
+          unit: "mA",
+          ts
+        },
+        CL3: {
+          desc: "LINE CURRENT L3",
+          value: values.reg44116,
+          unit: "mA",
+          ts
+        },
+        P3PF: {
+          desc: "3-PHASE SYS. POWER FACTOR I",
+          value: values.reg44118,
+          unit: "na",
+          ts
+        },
+        PF_L1: {
+          desc: "POWER FACTOR L1",
+          value: values.reg44120,
+          unit: "na",
+          ts
+        },
+        PF_L2: {
+          desc: "POWER FACTOR L2",
+          value: values.reg44122,
+          unit: "",
+          ts
+        },
+        PF_L3: {
+          desc: "POWER FACTOR L3",
+          value: values.reg44124,
+          unit: "",
+          ts
+        },
+        P3_COSθ: {
+          desc: "3-PHASE SYSTEM COSθ",
+          value: values.reg44126,
+          unit: "",
+          ts
+        },
+        P_COSθ_1: {
+          desc: "PHASE COSθ-1",
+          value: values.reg44128,
+          unit: "",
+          ts
+        },
+        P_COSθ_2: {
+          desc: "PHASE COSθ-2",
+          value: values.reg44130,
+          unit: "",
+          ts
+        },
+        P_COSθ_3: {
+          desc: "PHASE COSθ-3",
+          value: values.reg44132,
+          unit: "",
+          ts
+        },
+        P3_AP: {
+          desc: "3-PHASE S. APPARENT POWER",
+          value: values.reg44134,
+          unit: "VA",
+          ts
+        },
+        APP_L1: {
+          desc: "APPARENT POWER L1",
+          value: values.reg44136,
+          unit: "VA",
+          ts
+        },
+        APP_L2: {
+          desc: "APPARENT POWER L2",
+          value: values.reg44138,
+          unit: "VA",
+          ts
+        },
+        APP_L3: {
+          desc: "APPARENT POWER L3",
+          value: values.reg44140,
+          unit: "VA",
+          ts
+        },
+        P3_ACT: {
+          desc: "3-PHASE SYS. ACTIVE POWER",
+          value: values.reg44142,
+          unit: "Watt",
+          ts
+        },
+        ACT_L1: {
+          desc: "APPARENT POWER L1",
+          value: values.reg44144,
+          unit: "Watt",
+          ts
+        },
+        ACT_L2: {
+          desc: "APPARENT POWER L2",
+          value: values.reg44146,
+          unit: "Watt",
+          ts
+        },
+        ACT_L3: {
+          desc: "APPARENT POWER L3",
+          value: values.reg44148,
+          unit: "Watt",
+          ts
+        },
+        P3_REACT_P: {
+          desc: "3-PHASE S. REACTIVE POWER",
+          value: values.reg44150,
+          unit: "VAr",
+          ts
+        },
+        REACT_PL1: {
+          desc: "REACTIVE POWER L1",
+          value: values.reg44152,
+          unit: "VAr",
+          ts
+        },
+        REACT_PL2: {
+          desc: "REACTIVE POWER L2",
+          value: values.reg44154,
+          unit: "VAr",
+          ts
+        },
+        REACT_PL3: {
+          desc: "REACTIVE POWER L3",
+          value: values.reg44156,
+          unit: "VAr",
+          ts
+        },
+        P3_ACT_ENEG: {
+          desc: "3-PHASE SYS. ACTIVE ENERGY",
+          value: values.reg44158,
+          unit: "Wh",
+          ts
+        },
+        P3_REACT_ENEG: {
+          desc: "3-PHASE S. REACTIVE ENERGY",
+          value: values.reg44160,
+          unit: "VArh",
+          ts
+        },
+
+        //Block 2
+        FREQUENCY: {
+          desc: "FREQUENCY",
+          value: values.reg44166,
+          unit: "mHz",
+          ts
+        },
+
+        //Block 3
+        C_L1: {
+          desc: "MAX LINE CURRENT L1",
+          value: values.reg44192,
+          unit: "mA",
+          ts
+        },
+        C_L2: {
+          desc: "MAX LINE CURRENT L2",
+          value: values.reg44194,
+          unit: "mA",
+          ts
+        },
+        C_L3: {
+          desc: "MAX LINE CURRENT L3",
+          value: values.reg44196,
+          unit: "mA",
+          ts
+        },
+        MAX_3P_ACTPWR: {
+          desc: "MAX 3-PHASE SYS. ACTIVE POWER",
+          value: values.reg44198,
+          unit: "mHz",
+          ts
+        },
+        MAX_3P_APPRPWR: {
+          desc: "MAX 3-PHASE S. APPARENT POWER",
+          value: values.reg44200,
+          unit: "mHz",
+          ts
+        },
+  }
+};
 
 
-    // ========== SAVE TO DB ==========
+
+    // ========== SAVE EVERY 2 MIN ==========
 
     const now = Date.now();
 
@@ -260,7 +539,7 @@ async function pollMeter() {
 
       lastMongoSave = now;
 
-      console.log("💾 Saved to MongoDB");
+      console.log("💾 Saved MongoDB");
     }
 
 
@@ -268,11 +547,9 @@ async function pollMeter() {
 
     liveData = {
 
-      name: device.name,
+      device: device.name,
 
-      reg44096: values.reg44096,
-      reg44098: values.reg44098,
-      reg44160: values.reg44160,
+      ...values,
 
       time: new Date().toLocaleString()
     };
@@ -290,32 +567,33 @@ async function pollMeter() {
     try {
       modbusClient.close();
     } catch {}
+
   }
 }
 
 
-// ================= START POLLING =================
+// ================= START POLL =================
 
 setInterval(pollMeter, POLL_INTERVAL);
 
 
-// ================= SOCKET.IO =================
+// ================= SOCKET =================
 
 io.on("connection", (socket) => {
 
-  console.log("🌐 Browser Connected");
+  console.log("🌐 Client Connected");
 
   if (liveData) {
     socket.emit("meterData", liveData);
   }
 
   socket.on("disconnect", () => {
-    console.log("❌ Browser Disconnected");
+    console.log("❌ Client Disconnected");
   });
 });
 
 
-// ================= START SERVER =================
+// ================= SERVER =================
 
 server.listen(SERVER_PORT, () => {
 
