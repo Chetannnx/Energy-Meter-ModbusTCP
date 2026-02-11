@@ -40,7 +40,7 @@ const MONGO_INTERVAL = 120000;  // 2 min
 
 const device = {
   name: "Meter-1",
-  ip: "192.168.0.201",
+  ip: "192.168.1.201",
   unitId: 1
 };
 
@@ -153,13 +153,24 @@ async function readChunks(start, count, chunk = 20) {
 const BLOCKS = [
 
   // 44096 → 44160
-  { start: 4095, count: 65 },
+  { start: 4095, count: 65 }, //BLOCK 1
 
   // 44166 → 44190
-  { start: 4165, count: 25 },
+  { start: 4165, count: 25 }, //BLOCK 2
 
   // 44192 → 44200
-  { start: 4191, count: 9 }
+  { start: 4191, count: 9 }, //BLOCK 3
+
+  // 44208 → 44250
+  { start: 4207, count: 43 }, //BLOCK 4
+
+  // 44262 → 44292
+  { start: 4261, count: 31 }, //BLOCK 5
+
+  // 44512 → 44514
+  { start: 4511, count: 3 }, //BLOCK 6
+
+
 ];
 
 
@@ -188,9 +199,13 @@ async function readRegisters() {
 
 function mapValues(raw) {
 
-  const b1 = raw[4095]; // first block
-  const b2 = raw[4165]; // second block
-  const b3 = raw[4191]; // third block
+  const b1 = raw[4095]; // First block
+  const b2 = raw[4165]; // Second block
+  const b3 = raw[4191]; // Third block
+  const b4 = raw[4207]; // Fourth block
+  const b5 = raw[4261]; // Fifth block
+  const b6 = raw[4511]; // Fifth block
+
 
   return {
 
@@ -238,6 +253,54 @@ function mapValues(raw) {
     reg44196: b3[4],
     reg44198: b3[6],
     reg44200: b3[8],
+
+    //BLOCK 4
+    reg44208: b4[0],
+    reg44210: b4[2],
+    reg44212: b4[4],
+    reg44214: b4[6],
+    reg44216: b4[8],
+    reg44218: b4[10],
+    reg44220: b4[12],
+    reg44222: b4[14],
+    reg44224: b4[16],
+    reg44226: b4[18],
+    reg44228: b4[20],
+    reg44230: b4[22],
+    reg44232: b4[24],
+    reg44234: b4[26],
+    reg44236: b4[28],
+    reg44238: b4[30],
+    reg44240: b4[32],
+    reg44242: b4[34],
+    reg44244: b4[36],
+    reg44246: b4[38],
+    reg44248: b4[40],
+    reg44250: b4[42],
+
+
+    //BLOCK 5
+    reg44262: b5[0],
+    reg44264: b5[2],
+    reg44266: b5[4],
+    reg44268: b5[6],
+    reg44270: b5[8],
+    reg44272: b5[10],
+    reg44274: b5[12],
+    reg44276: b5[14],
+    reg44278: b5[16],
+    reg44280: b5[18],
+    reg44282: b5[20],
+    reg44284: b5[22],
+    reg44286: b5[24],
+    reg44288: b5[26],
+    reg44290: b5[28],
+    reg44292: b5[30],
+
+
+    //BLOCK 6
+    reg44512: b6[0],
+    reg44514: b6[2],
 
   };
 }
@@ -484,8 +547,9 @@ async function pollMeter() {
           unit: "VArh",
           ts
         },
+        
 
-        //Block 2
+        //BLOCK 2
         FREQUENCY: {
           desc: "FREQUENCY",
           value: values.reg44166,
@@ -493,7 +557,8 @@ async function pollMeter() {
           ts
         },
 
-        //Block 3
+
+        //BLOCK 3
         C_L1: {
           desc: "MAX LINE CURRENT L1",
           value: values.reg44192,
@@ -515,15 +580,267 @@ async function pollMeter() {
         MAX_3P_ACTPWR: {
           desc: "MAX 3-PHASE SYS. ACTIVE POWER",
           value: values.reg44198,
-          unit: "mHz",
+          unit: "Watt",
           ts
         },
         MAX_3P_APPRPWR: {
           desc: "MAX 3-PHASE S. APPARENT POWER",
           value: values.reg44200,
-          unit: "mHz",
+          unit: "VA",
           ts
         },
+
+
+        //BLOCK 4
+        _: {
+          desc: "-",
+          value: values.reg44208,
+          unit: "Watt",
+          ts
+        },
+        P3_APPR_PWR: {
+          desc: "3-PHASE SYS. APPARENT POWER 15’ AVER",
+          value: values.reg44210,
+          unit: "VA",
+          ts
+        },
+        ACT_ENERG_L1: {
+          desc: "ACTIVE ENERGY L1",
+          value: values.reg44212,
+          unit: "Wh",
+          ts
+        },
+        ACT_ENERG_L2: {
+          desc: "ACTIVE ENERGY L2",
+          value: values.reg44214,
+          unit: "Wh",
+          ts
+        },
+        ACT_ENERG_L3: {
+          desc: "ACTIVE ENERGY L3",
+          value: values.reg44216,
+          unit: "Wh",
+          ts
+        },
+        REACT_ENERG_L1: {
+          desc: "REACTIVE ENERGY L1",
+          value: values.reg44218,
+          unit: "VArh",
+          ts
+        },
+        REACT_ENERG_L2: {
+          desc: "REACTIVE ENERGY L2",
+          value: values.reg44220,
+          unit: "VArh",
+          ts
+        },
+        REACT_ENERG_L3: {
+          desc: "REACTIVE ENERGY L3",
+          value: values.reg44222,
+          unit: "VArh",
+          ts
+        },
+        P3_ACT_PWR_L2: {
+          desc: "MAX 3-PHASE SYS. ACTIVE POWER 15’ AVER",
+          value: values.reg44224,
+          unit: "Watt",
+          ts
+        },
+        VOLT_THD_L1: {
+          desc: "VOLTAGE THD L1",
+          value: values.reg44226,
+          unit: "-",
+          ts
+        },
+        VOLT_THD_L2: {
+          desc: "VOLTAGE THD L2",
+          value: values.reg44228,
+          unit: "-",
+          ts
+        },
+        VOLT_THD_L3: {
+          desc: "VOLTAGE THD L3",
+          value: values.reg44230,
+          unit: "-",
+          ts
+        },
+        CURRENT_THD_L1: {
+          desc: "CURRENT THD L1",
+          value: values.reg44232,
+          unit: "-",
+          ts
+        },
+        CURRENT_THD_L2: {
+          desc: "CURRENT THD L2",
+          value: values.reg44234,
+          unit: "-",
+          ts
+        },
+        CURRENT_THD_L3: {
+          desc: "CURRENT THD L3",
+          value: values.reg44236,
+          unit: "-",
+          ts
+        },
+        MAX_ACT_PWR_L1: {
+          desc: "MAX ACTIVE POWER 15’ AVER L1",
+          value: values.reg44238,
+          unit: "Watt",
+          ts
+        },
+        MAX_ACT_PWR_L2: {
+          desc: "MAX ACTIVE POWER 15’ AVER L2",
+          value: values.reg44240,
+          unit: "Watt",
+          ts
+        },
+        MAX_ACT_PWR_L3: {
+          desc: "MAX ACTIVE POWER 15’ AVER L3",
+          value: values.reg44242,
+          unit: "Watt",
+          ts
+        },
+        MAX_APPRT_PWR: {
+          desc: "MAX 3-PHASE SYS. APPARENT POWER 15’ AVER",
+          value: values.reg44244,
+          unit: "VA",
+          ts
+        },
+        MAX_APPRT_PWR_L1: {
+          desc: "MAX APPARERENT POWER 15’ AVER L1",
+          value: values.reg44246,
+          unit: "VA",
+          ts
+        },
+        MAX_APPRT_PWR_L2: {
+          desc: "MAX APPARERENT POWER 15’ AVER L2",
+          value: values.reg44248,
+          unit: "VA",
+          ts
+        },
+        MAX_APPRT_PWR_L3: {
+          desc: "MAX APPARERENT POWER 15’ AVER L2",
+          value: values.reg44250,
+          unit: "VA",
+          ts
+        },
+
+
+      //BLOCK 5
+      P3_APP_ENERG: {
+          desc: "3-PHASE SYS. APPARENT ENERGY",
+          value: values.reg44262,
+          unit: "VAh",
+          ts
+        },
+        APPR_ENEG_L1: {
+          desc: "APPARENT ENERGY L1",
+          value: values.reg44264,
+          unit: "VA",
+          ts
+        },
+        APPR_ENEG_L2: {
+          desc: "APPARENT ENERGY L2",
+          value: values.reg44266,
+          unit: "Wh",
+          ts
+        },
+        APPR_ENEG_L3: {
+          desc: "APPARENT ENERGY L3",
+          value: values.reg44268,
+          unit: "Wh",
+          ts
+        },
+        P3_GNT_ACT_ENERG: {
+          desc: "3-PHASE SYS. GENERATED ACTIVE ENERGY ",
+          value: values.reg44270,
+          unit: "Wh",
+          ts
+        },
+        GNT_ACT_ENEG_L1: {
+          desc: "GENERATED ACTIVE ENERGY L1",
+          value: values.reg44272,
+          unit: "Wh",
+          ts
+        },
+        GNT_ACT_ENEG_L2: {
+          desc: "GENERATED ACTIVE ENERGY L2",
+          value: values.reg44274,
+          unit: "Wh",
+          ts
+        },
+        GNT_ACT_ENEG_L3: {
+          desc: "GENERATED ACTIVE ENERGY L3",
+          value: values.reg44276,
+          unit: "Wh",
+          ts
+        },
+        P3_GNT_REACT_ENERG: {
+          desc: "3-PHASE S. GENERATED REACTIVE ENERGY",
+          value: values.reg44278,
+          unit: "VArh",
+          ts
+        },
+        GNT_REACT_ENEG_L1: {
+          desc: "GENERATED REACTIVE ENERGY L1",
+          value: values.reg44280,
+          unit: "VArh",
+          ts
+        },
+        GNT_REACT_ENEG_L2: {
+          desc: "GENERATED REACTIVE ENERGY L2",
+          value: values.reg44282,
+          unit: "VArh",
+          ts
+        },
+        GNT_REACT_ENEG_L3: {
+          desc: "GENERATED REACTIVE ENERGY L3",
+          value: values.reg44284,
+          unit: "VArh",
+          ts
+        },
+        P3_GNT_APPRN_ENERG: {
+          desc: "3-PHASE S. GENERATED APPARENT ENERGY",
+          value: values.reg44286,
+          unit: "VAh",
+          ts
+        },
+        GNT_APPRN_ENEG_L1: {
+          desc: "GENERATED APPARENT ENERGY L1",
+          value: values.reg44288,
+          unit: "VAh",
+          ts
+        },
+        GNT_APPRN_ENEG_L2: {
+          desc: "GENERATED APPARENT ENERGY L2",
+          value: values.reg44290,
+          unit: "VAh",
+          ts
+        },
+        GNT_APPRN_ENEG_L3: {
+          desc: "GENERATED APPARENT ENERGY L3",
+          value: values.reg44292,
+          unit: "VAh",
+          ts
+        },
+
+
+        //BLOCK 6
+        CT_PRM: {
+          desc: "CURRENT TRANSFORMER PRIMARY (CT)",
+          value: values.reg44512,
+          unit: "-",
+          ts
+        },
+        VT_PRM: {
+          desc: "VOLTAGE TRANSFORMER PRIMARY (VT)",
+          value: values.reg44514,
+          unit: "-",
+          ts
+        },
+
+
+        
   }
 };
 
